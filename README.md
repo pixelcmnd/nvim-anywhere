@@ -2,7 +2,7 @@
 
 Invoke a GUI Vim editor from another application, edit a private temporary file,
 and return its contents to the clipboard. Focus returns to the original macOS
-application; paste manually with Command-V. Linux uses gVim and xclip.
+application; paste manually. Linux supports Wayland with Neovide and wl-clipboard.
 
 ## Installation
 
@@ -24,8 +24,9 @@ nix profile install nixpkgs#neovide nixpkgs#neovim
 
 Or, with Homebrew, use `brew install --cask neovide` and `brew install neovim`.
 Check [Neovide's installation instructions](https://neovide.dev/installation.html)
-for version requirements. Linux requires gVim, xclip and GNOME's gsettings or
-legacy gconftool for automatic shortcut setup.
+for version requirements. On Linux install Neovide, a compatible Neovim, and
+`wl-clipboard` (`wl-copy`). A Wayland session is required; X11 and i3 are not
+supported.
 
 Clone [pixelcmnd/nvim-anywhere](https://github.com/pixelcmnd/nvim-anywhere),
 enter its checkout, and run the installer:
@@ -46,15 +47,60 @@ installation must be resolved first. `~/.nvim-anywhere/uninstall` removes the
 shortcut workflow and moves the installation to a named backup; configuration,
 backups and history remain.
 
+### Shortcuts
+
 On macOS enable NvimAnywhere in System Settings > Keyboard > Keyboard Shortcuts
-> Services (or Quick Actions), and assign Control-Command-V if available. The
-installer does not replace existing service shortcuts. On Linux the GNOME
-shortcut is Control-Alt-V. For i3 add `bindsym $mod+Alt+v exec ~/.nvim-anywhere/bin/run`
-to the i3 configuration and reload it.
+> Services (or Quick Actions), then assign **Control+Option+Command+I**. The
+installer preserves existing service shortcuts; choose another combination if
+this one is already in use.
+
+On Linux configure **Control+Alt+Super+I** yourself. For GNOME or KDE Plasma,
+create a custom command shortcut in Keyboard Shortcuts settings. Use the absolute
+path `~/.nvim-anywhere/bin/run`, replacing `~` with your home directory. For a
+Nix installation use the absolute path to `nvim-anywhere` in your profile.
+The installer does not change desktop or compositor settings.
+
+Examples for a checkout installation (replace `~` with your absolute home path
+if your compositor does not expand it):
+
+```text
+# Sway (~/.config/sway/config)
+bindsym Control+Mod1+Mod4+i exec ~/.nvim-anywhere/bin/run
+
+# Hyprland (~/.config/hypr/hyprland.conf)
+bind = CTRL ALT SUPER, I, exec, ~/.nvim-anywhere/bin/run
+
+# niri (~/.config/niri/config.kdl), inside binds { ... }
+Ctrl+Alt+Super+I { spawn "~/.nvim-anywhere/bin/run"; }
+```
+
+Use a different binding if the suggested one is already in use. The compositor
+controls focus when Neovide closes; explicit focus restoration is not guaranteed
+on Linux. Automatic paste is available only on macOS.
+
+### Nix on Linux
+
+This repository provides a flake package for `x86_64-linux` and `aarch64-linux`.
+Add it as an input to your NixOS or Home Manager flake, then add the package to
+`environment.systemPackages` or `home.packages`, respectively:
+
+```nix
+# flake input
+inputs.nvim-anywhere.url = "github:pixelcmnd/nvim-anywhere";
+
+# In a module that receives inputs and pkgs:
+inputs.nvim-anywhere.packages.${pkgs.stdenv.hostPlatform.system}.default
+```
+
+Use this expression as an item in the relevant package list. Alternatively,
+`nix profile install github:pixelcmnd/nvim-anywhere` installs it to your profile.
+The package wraps Neovide, Neovim, and wl-clipboard in its runtime `PATH`; it
+still loads your normal Neovim configuration. For a non-NixOS system, Neovide
+may need a graphics wrapper such as nixGL. The flake does not install shortcuts.
 
 ## Editor and behavior
 
-Neovide is the macOS default; gVim is the Linux default. Neovide launches your
+Neovide is the default on macOS and Linux. Neovide launches your
 normal Neovim configuration, including plugins and keymaps. No minimal Neovim
 configuration is imposed. Neovide's `--no-fork` makes the process blocking and
 an existing Neovide instance is not reused. A Neovide configuration specifying
@@ -69,7 +115,8 @@ editor=neovide
 auto_paste=false
 ```
 
-`editor` accepts `neovide`, `mvim`, `gvim`, or an absolute executable path.
+`editor` accepts `neovide`, an absolute executable path, or `mvim`/`gvim` on macOS.
+On Linux a custom editor must be a Wayland client and must block until it exits.
 An explicit `NVIM_ANYWHERE_EDITOR` environment variable overrides the file;
 the legacy `VIM_ANYWHERE_EDITOR` is used if the new variable is unset. The file
 overrides the platform default. If the new config file does not exist, the old
@@ -82,7 +129,7 @@ Homebrew locations without reading shell startup files. For an editor in another
 location, specify an absolute path. Neovide also needs `nvim` on that search
 path; for a custom Nix profile, expose Neovim through one of those directories
 or the environment inherited by the service. Prefer stable profile paths over
-individual `/nix/store` paths, which change between generations. Legacy mvim and gvim retain support for
+individual `/nix/store` paths, which change between generations. Legacy mvim and gvim on macOS retain support for
 `~/.gvimrc.min` or `~/.vimrc.min`; Neovide does not use them.
 
 Save and exit with `:wq`. A normal `:q` also completes successfully, including
@@ -112,7 +159,8 @@ Older versions used `${TMPDIR:-/tmp}/vim-anywhere` or
 fallback; move it to `~/.config/nvim-anywhere/config` when convenient. The old
 `:VimAnywhereCancel` command remains an alias. On macOS, disable or remove the
 old VimAnywhere service shortcut before assigning it to NvimAnywhere. On Linux,
-remove the old GNOME shortcut and assign one to nvim-anywhere in Settings.
+remove the old GNOME shortcut and assign the new shortcut in your desktop or
+compositor. Existing gVim/xclip setups must migrate to Neovide and wl-clipboard.
 The old MacVim `.path` is not imported; use `editor=mvim` if desired.
 
 ## Troubleshooting and manual checks
@@ -131,3 +179,8 @@ paste, test with an unselected text field and then a selection. Also verify
 checks require a real desktop session.
 
 See [FAQ](FAQ.md). Licensed under MIT.
+
+For each Linux desktop or compositor, manually verify the shortcut, a saved and
+an empty file, cancellation, clipboard contents, focus after closing Neovide,
+and a second session while Neovide is already open. Check clipboard access and
+focus in GNOME, Plasma, Sway, niri, and Hyprland; these require real sessions.
