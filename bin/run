@@ -5,7 +5,9 @@ umask 077
 PATH="$PATH:$HOME/.nix-profile/bin:/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 export PATH
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-config="${XDG_CONFIG_HOME:-$HOME/.config}/vim-anywhere/config"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/nvim-anywhere/config"
+legacy_config="${XDG_CONFIG_HOME:-$HOME/.config}/vim-anywhere/config"
+if [ ! -f "$config" ] && [ -f "$legacy_config" ]; then config=$legacy_config; fi
 editor_config= auto_paste=false
 if [ -f "$config" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -14,50 +16,50 @@ if [ -f "$config" ]; then
       editor=*) editor_config=${line#editor=} ;;
       auto_paste=true) auto_paste=true ;;
       auto_paste=false) auto_paste=false ;;
-      *) printf 'vim-anywhere: invalid configuration line: %s\n' "$line" >&2; exit 1 ;;
+      *) printf 'nvim-anywhere: invalid configuration line: %s\n' "$line" >&2; exit 1 ;;
     esac
   done < "$config"
 fi
 case "$OSTYPE" in
   darwin*) platform=mac; default=neovide ;;
   linux*) platform=linux; default=gvim ;;
-  *) echo "vim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
+  *) echo "nvim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
 esac
-editor=${VIM_ANYWHERE_EDITOR:-${editor_config:-$default}}
+editor=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${editor_config:-$default}}}
 case "$editor" in
   */*) binary=$editor; kind=${editor##*/} ;;
   *) binary=$(command -v "$editor" || true); kind=$editor ;;
 esac
 if [ -z "$binary" ] || [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
-  printf 'vim-anywhere: editor executable not found or not executable: %s\n' "$editor" >&2; exit 1
+  printf 'nvim-anywhere: editor executable not found or not executable: %s\n' "$editor" >&2; exit 1
 fi
 case "$kind" in neovide|mvim|gvim) ;; *) kind=custom ;; esac
 if [ "$platform" = mac ]; then
   for utility in osascript pbcopy; do
-    command -v "$utility" >/dev/null || { echo "vim-anywhere: missing $utility" >&2; exit 1; }
+    command -v "$utility" >/dev/null || { echo "nvim-anywhere: missing $utility" >&2; exit 1; }
   done
-  app=$(osascript "$root/script/current_app.scpt") || { echo 'vim-anywhere: could not identify the frontmost application' >&2; exit 1; }
-  restore() { osascript "$root/script/restore_app.scpt" "$app" || echo 'vim-anywhere: could not restore focus' >&2; }
+  app=$(osascript "$root/script/current_app.scpt") || { echo 'nvim-anywhere: could not identify the frontmost application' >&2; exit 1; }
+  restore() { osascript "$root/script/restore_app.scpt" "$app" || echo 'nvim-anywhere: could not restore focus' >&2; }
   trap restore EXIT
 else
-  command -v xclip >/dev/null || { echo 'vim-anywhere: missing xclip' >&2; exit 1; }
+  command -v xclip >/dev/null || { echo 'nvim-anywhere: missing xclip' >&2; exit 1; }
 fi
-history="${TMPDIR:-/tmp}/vim-anywhere-$UID"
+history="${TMPDIR:-/tmp}/nvim-anywhere-$UID"
 # Refuse symlinks and directories owned by somebody else.
 if [ -L "$history" ] || { [ -e "$history" ] && { [ ! -d "$history" ] || [ ! -O "$history" ]; }; }; then
-  echo "vim-anywhere: unsafe history directory: $history" >&2; exit 1
+  echo "nvim-anywhere: unsafe history directory: $history" >&2; exit 1
 fi
 mkdir -p "$history"
 chmod 700 "$history"
 file=$(mktemp "$history/doc.XXXXXXXXXX")
-export VIM_ANYWHERE_CANCEL_FILE="$file.cancel"
-export VIM_ANYWHERE_SESSION_SCRIPT="$root/script/session.vim"
-cancel_command='execute "source" fnameescape($VIM_ANYWHERE_SESSION_SCRIPT)'
+export NVIM_ANYWHERE_CANCEL_FILE="$file.cancel"
+export NVIM_ANYWHERE_SESSION_SCRIPT="$root/script/session.vim"
+cancel_command='execute "source" fnameescape($NVIM_ANYWHERE_SESSION_SCRIPT)'
 opts=()
 case "$kind" in
   neovide)
     nvim=$(command -v nvim || true)
-    if [ -z "$nvim" ]; then echo 'vim-anywhere: nvim not found in PATH' >&2; exit 1; fi
+    if [ -z "$nvim" ]; then echo 'nvim-anywhere: nvim not found in PATH' >&2; exit 1; fi
     # Explicitly override Neovide's fork and server settings; no instance reuse.
     unset NEOVIDE_SERVER
     # A configured remote server could outlive this process, invalidating completion.
@@ -66,7 +68,7 @@ case "$kind" in
       neovide_config="$HOME/Library/Application Support/neovide/config.toml"
     fi
     if [ -f "$neovide_config" ] && grep -Eq '^[[:space:]]*server[[:space:]]*=' "$neovide_config"; then
-      echo 'vim-anywhere: Neovide config specifies a server; use a local Neovide config for this session' >&2; exit 1
+      echo 'nvim-anywhere: Neovide config specifies a server; use a local Neovide config for this session' >&2; exit 1
     fi
     opts=(--no-fork --neovim-bin "$nvim") ;;
   mvim|gvim)
@@ -82,7 +84,7 @@ elif [ "$kind" = mvim ] || [ "$kind" = gvim ]; then
 else
   set -- "$file"
 fi
-if "$binary" "$@" && [ ! -e "$VIM_ANYWHERE_CANCEL_FILE" ]; then
+if "$binary" "$@" && [ ! -e "$NVIM_ANYWHERE_CANCEL_FILE" ]; then
   if [ "$platform" = mac ]; then
     LANG=en_US.UTF-8 pbcopy < "$file"
   else
@@ -91,11 +93,11 @@ if "$binary" "$@" && [ ! -e "$VIM_ANYWHERE_CANCEL_FILE" ]; then
 else
   code=$?
   [ "$code" -ne 0 ] || code=1
-  printf 'vim-anywhere: editor exited with status %s; clipboard unchanged\n' "$code" >&2
+  printf 'nvim-anywhere: editor exited with status %s; clipboard unchanged\n' "$code" >&2
   exit "$code"
 fi
 if [ "$platform" = mac ] && [ "$auto_paste" = true ]; then
   restore
   trap - EXIT
-  osascript "$root/script/paste.scpt" "$app" || { echo 'vim-anywhere: automatic paste failed; text remains on the clipboard' >&2; exit 1; }
+  osascript "$root/script/paste.scpt" "$app" || { echo 'nvim-anywhere: automatic paste failed; text remains on the clipboard' >&2; exit 1; }
 fi

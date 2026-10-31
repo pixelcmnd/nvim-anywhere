@@ -4,8 +4,10 @@ umask 077
 PATH="$PATH:$HOME/.nix-profile/bin:/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 export PATH
 source_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-install_dir="$HOME/.vim-anywhere"
-config="${XDG_CONFIG_HOME:-$HOME/.config}/vim-anywhere/config"
+install_dir="$HOME/.nvim-anywhere"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/nvim-anywhere/config"
+legacy_config="${XDG_CONFIG_HOME:-$HOME/.config}/vim-anywhere/config"
+if [ ! -f "$config" ] && [ -f "$legacy_config" ]; then config=$legacy_config; fi
 selected=
 if [ -f "$config" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -13,23 +15,23 @@ if [ -f "$config" ]; then
   done < "$config"
 fi
 case "$OSTYPE" in
-  darwin*) selected=${VIM_ANYWHERE_EDITOR:-${selected:-neovide}} ;;
-  linux*) selected=${VIM_ANYWHERE_EDITOR:-${selected:-gvim}} ;;
-  *) echo "vim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
+  darwin*) selected=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${selected:-neovide}}} ;;
+  linux*) selected=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${selected:-gvim}}} ;;
+  *) echo "nvim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
 esac
-require() { command -v "$1" >/dev/null 2>&1 || { echo "vim-anywhere: requires $1" >&2; exit 1; }; }
+require() { command -v "$1" >/dev/null 2>&1 || { echo "nvim-anywhere: requires $1" >&2; exit 1; }; }
 require git
 case "$selected" in
-  */*) [ -f "$selected" ] && [ -x "$selected" ] || { echo "vim-anywhere: editor not executable: $selected" >&2; exit 1; } ;;
+  */*) [ -f "$selected" ] && [ -x "$selected" ] || { echo "nvim-anywhere: editor not executable: $selected" >&2; exit 1; } ;;
   *) require "$selected" ;;
 esac
 case "${selected##*/}" in neovide) require nvim ;; esac
 case "$OSTYPE" in
-  linux*) require xclip; if ! command -v gconftool >/dev/null && ! command -v gsettings >/dev/null; then echo 'vim-anywhere: requires gsettings or gconftool' >&2; exit 1; fi ;;
+  linux*) require xclip; if ! command -v gconftool >/dev/null && ! command -v gsettings >/dev/null; then echo 'nvim-anywhere: requires gsettings or gconftool' >&2; exit 1; fi ;;
 esac
-[ -d "$source_dir/.git" ] || { echo 'vim-anywhere: run install from a local Git checkout of this fork' >&2; exit 1; }
-if [ "$source_dir" = "$install_dir" ]; then echo 'vim-anywhere: already installed; use update instead' >&2; exit 1; fi
-stage=$(mktemp -d "$HOME/.vim-anywhere-stage.XXXXXXXX")
+[ -d "$source_dir/.git" ] || { echo 'nvim-anywhere: run install from a local Git checkout of this fork' >&2; exit 1; }
+if [ "$source_dir" = "$install_dir" ]; then echo 'nvim-anywhere: already installed; use update instead' >&2; exit 1; fi
+stage=$(mktemp -d "$HOME/.nvim-anywhere-stage.XXXXXXXX")
 installed=false
 finished=false
 cleanup() {
@@ -46,12 +48,12 @@ cleanup() {
 trap cleanup EXIT
 git clone --quiet "$source_dir" "$stage/repo"
 # Include the current checkout, including intentional uncommitted changes.
-for path in bin script VimAnywhere.workflow install update uninstall README.md FAQ.md CONTRIBUTING.md; do
+for path in bin script NvimAnywhere.workflow install update uninstall README.md FAQ.md CONTRIBUTING.md; do
   rm -rf "$stage/repo/$path"
   cp -R "$source_dir/$path" "$stage/repo/$path"
 done
 if [ -e "$install_dir" ] || [ -L "$install_dir" ]; then
-  backup=$(mktemp -d "$HOME/.vim-anywhere-backup.XXXXXXXX")
+  backup=$(mktemp -d "$HOME/.nvim-anywhere-backup.XXXXXXXX")
   rmdir "$backup"
   mv "$install_dir" "$backup"
   echo "Previous installation preserved at $backup"
@@ -64,28 +66,36 @@ installed=true
 case "$OSTYPE" in
   darwin*)
     mkdir -p "$HOME/Library/Services"
-    service="$HOME/Library/Services/VimAnywhere.workflow"
+    service="$HOME/Library/Services/NvimAnywhere.workflow"
     if [ -e "$service" ]; then
-      service_backup=$(mktemp -d "$HOME/Library/Services/.VimAnywhere-backup.XXXXXXXX")
+      service_backup=$(mktemp -d "$HOME/Library/Services/.NvimAnywhere-backup.XXXXXXXX")
       rmdir "$service_backup"
       mv "$service" "$service_backup"
       echo "Previous workflow preserved at $service_backup"
     fi
     service_changed=true
-    cp -R "$install_dir/VimAnywhere.workflow" "$service"
-    echo 'Set the VimAnywhere shortcut in System Settings > Keyboard > Keyboard Shortcuts > Services.' ;;
+    cp -R "$install_dir/NvimAnywhere.workflow" "$service"
+    if [ -e "$HOME/Library/Services/VimAnywhere.workflow" ]; then
+      echo 'The old VimAnywhere service is still installed; disable its shortcut before assigning it to NvimAnywhere.'
+    fi
+    echo 'Set the NvimAnywhere shortcut in System Settings > Keyboard > Keyboard Shortcuts > Services.' ;;
   linux*)
-    name=vim-anywhere; binding='<CTRL><ALT>v'; action="$install_dir/bin/run"
+    name=nvim-anywhere; binding='<CTRL><ALT>v'; action="$install_dir/bin/run"
     if command -v gconftool >/dev/null; then
-      kbd_path=/desktop/gnome/keybindings/vim-anywhere
+      kbd_path=/desktop/gnome/keybindings/nvim-anywhere
       gconftool -t str --set "$kbd_path/name" "$name"
       gconftool -t str --set "$kbd_path/binding" "$binding"
       gconftool -t str --set "$kbd_path/action" "$action"
     else
       media_keys=org.gnome.settings-daemon.plugins.media-keys
       custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
+      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/nvim-anywhere/
       bindings=$(gsettings get "$media_keys" custom-keybindings)
+      case "$bindings" in
+        *"'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/'"*)
+          binding=''
+          echo 'The old vim-anywhere shortcut is still configured; assign a shortcut to nvim-anywhere after removing the old one.' ;;
+      esac
       case "$bindings" in *"'$kbd_path'"*) ;; *) bindings=$(printf '%s' "$bindings" | sed -e "s>']>','$kbd_path']>" -e "s>@as \[\]>['$kbd_path']>"); gsettings set "$media_keys" custom-keybindings "$bindings" ;; esac
       gsettings set "$custom_kbd:$kbd_path" name "$name"
       gsettings set "$custom_kbd:$kbd_path" binding "$binding"
@@ -93,4 +103,4 @@ case "$OSTYPE" in
     fi ;;
 esac
 finished=true
-echo 'vim-anywhere has been successfully installed!'
+echo 'nvim-anywhere has been successfully installed!'

@@ -19,21 +19,21 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   make_stub neovide 'exit 9'
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 9 ]; [ "$(cat "$HOME/clipboard")" = original ]
-  make_stub neovide 'touch "$VIM_ANYWHERE_CANCEL_FILE"'
+  make_stub neovide 'touch "$NVIM_ANYWHERE_CANCEL_FILE"'
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
 }
 @test "custom path containing spaces and explicit override" {
-  mkdir -p "$HOME/my editors" "$HOME/.config/vim-anywhere"
-  printf 'editor=missing\n' > "$HOME/.config/vim-anywhere/config"
+  mkdir -p "$HOME/my editors" "$HOME/.config/nvim-anywhere"
+  printf 'editor=missing\n' > "$HOME/.config/nvim-anywhere/config"
   printf '#!/bin/bash\nprintf custom > "$1"\n' > "$HOME/my editors/editor"
   chmod +x "$HOME/my editors/editor"
-  export VIM_ANYWHERE_EDITOR="$HOME/my editors/editor"
+  export NVIM_ANYWHERE_EDITOR="$HOME/my editors/editor"
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = custom ]
 }
 @test "missing editor is reported" {
-  export VIM_ANYWHERE_EDITOR=/nonexistent/editor
+  export NVIM_ANYWHERE_EDITOR=/nonexistent/editor
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -ne 0 ]; [[ "$output" == *'editor executable not found'* ]]
 }
@@ -47,7 +47,7 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   make_stub neovide 'true'
   run_script darwin "$REPO_ROOT/bin/run"; [ "$status" -eq 0 ]
   run_script darwin "$REPO_ROOT/bin/run"; [ "$status" -eq 0 ]
-  dir="$TMPDIR/vim-anywhere-$UID"
+  dir="$TMPDIR/nvim-anywhere-$UID"
   [ "$(find "$dir" -type f | wc -l | tr -d ' ')" = 2 ]
   [ -z "$(find "$dir" -type f -perm -077 -print)" ]
 }
@@ -77,7 +77,7 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   export TMPDIR="$BATS_TEST_TMPDIR/temp with spaces"
   mkdir -p "$TMPDIR"
   echo original > "$HOME/clipboard"
-  make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE -c "$7" -c VimAnywhereCancel; exit 0'
+  make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE -c "$7" -c NvimAnywhereCancel; exit 0'
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
   [ -n "$(find "$TMPDIR" -name "*.cancel" -print)" ]
@@ -101,4 +101,28 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE "$4" -c "$7" -c "vsplit" -c "call feedkeys(\":q!\\<CR>:wq\\<CR>\", \"xt\")"'
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 0 ]; [ -f "$HOME/clipboard" ]
+}
+@test "legacy configuration is used until renamed configuration exists" {
+  mkdir -p "$HOME/.config/vim-anywhere" "$HOME/.config/nvim-anywhere"
+  printf 'editor=gvim\n' > "$HOME/.config/vim-anywhere/config"
+  make_stub gvim 'printf legacy > "${@: -1}"'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = legacy ]
+  printf 'editor=neovide\n' > "$HOME/.config/nvim-anywhere/config"
+  make_stub neovide 'printf new > "$4"'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = new ]
+}
+@test "new editor override takes precedence over legacy override" {
+  export VIM_ANYWHERE_EDITOR=/nonexistent/editor NVIM_ANYWHERE_EDITOR=neovide
+  make_stub neovide 'true'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]
+}
+@test "legacy cancellation command remains available" {
+  [ -n "$REAL_NVIM" ] || skip "Neovim is unavailable"
+  echo original > "$HOME/clipboard"
+  make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE -c "$7" -c VimAnywhereCancel; exit 0'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
 }

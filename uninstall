@@ -1,27 +1,27 @@
 #!/bin/bash
 set -e
-install_dir="$HOME/.vim-anywhere"
+install_dir="$HOME/.nvim-anywhere"
 if [ -e "$install_dir" ]; then
   if [ ! -f "$install_dir/bin/run" ] || [ ! -f "$install_dir/uninstall" ]; then
-    echo "vim-anywhere: refusing to remove unrecognized directory $install_dir" >&2; exit 1
+    echo "nvim-anywhere: refusing to remove unrecognized directory $install_dir" >&2; exit 1
   fi
-  backup=$(mktemp -d "$HOME/.vim-anywhere-uninstalled.XXXXXXXX")
+  backup=$(mktemp -d "$HOME/.nvim-anywhere-uninstalled.XXXXXXXX")
   rmdir "$backup"
   mv "$install_dir" "$backup"
   echo "Installation preserved at $backup"
 fi
 case "$OSTYPE" in
   darwin*)
-    service="$HOME/Library/Services/VimAnywhere.workflow"
-    if [ -f "$service/Contents/document.wflow" ] && grep -q '.vim-anywhere/bin/run' "$service/Contents/document.wflow"; then rm -rf "$service"; fi ;;
+    service="$HOME/Library/Services/NvimAnywhere.workflow"
+    if [ -f "$service/Contents/document.wflow" ] && grep -q '.nvim-anywhere/bin/run' "$service/Contents/document.wflow"; then rm -rf "$service"; fi ;;
   linux*)
     if command -v gconftool >/dev/null; then
-      kbd_path=/desktop/gnome/keybindings/vim-anywhere
+      kbd_path=/desktop/gnome/keybindings/nvim-anywhere
       for key in name binding action; do gconftool --unset "$kbd_path/$key"; done
     elif command -v gsettings >/dev/null; then
       custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
+      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/nvim-anywhere/
       gsettings reset-recursively "$custom_kbd:$kbd_path"
-    else echo 'vim-anywhere: no keybinding tool found; remove the shortcut manually' >&2; fi ;;
+    else echo 'nvim-anywhere: no keybinding tool found; remove the shortcut manually' >&2; fi ;;
 esac
-echo 'vim-anywhere has been uninstalled; configuration and editing history were preserved.'
+echo 'nvim-anywhere has been uninstalled; configuration and editing history were preserved.'

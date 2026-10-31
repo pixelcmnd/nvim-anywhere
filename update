@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 umask 077
-install_dir="$HOME/.vim-anywhere"
-[ -d "$install_dir/.git" ] || { echo 'vim-anywhere: installation is not a Git checkout' >&2; exit 1; }
+install_dir="$HOME/.nvim-anywhere"
+[ -d "$install_dir/.git" ] || { echo 'nvim-anywhere: installation is not a Git checkout' >&2; exit 1; }
 if [ -n "$(git -C "$install_dir" status --porcelain)" ]; then
-  echo 'vim-anywhere: installation has local changes; resolve them before updating' >&2; exit 1
+  echo 'nvim-anywhere: installation has local changes; resolve them before updating' >&2; exit 1
 fi
 # Update a copy first. The installed checkout remains intact until everything is ready.
-stage=$(mktemp -d "$HOME/.vim-anywhere-update.XXXXXXXX")
+stage=$(mktemp -d "$HOME/.nvim-anywhere-update.XXXXXXXX")
 old_moved=false
 new_installed=false
 service_moved=false
@@ -18,15 +18,15 @@ cleanup() {
   if [ "$complete" != true ]; then
     if [ "$service_installed" = true ]; then rm -rf "$service" || restore_failed=true; fi
     if [ "$service_moved" = true ]; then
-      mv "$stage/previous.workflow" "$service" || { echo "vim-anywhere: restore workflow from $stage/previous.workflow" >&2; restore_failed=true; }
+      mv "$stage/previous.workflow" "$service" || { echo "nvim-anywhere: restore workflow from $stage/previous.workflow" >&2; restore_failed=true; }
     fi
     if [ "$new_installed" = true ]; then rm -rf "$install_dir" || restore_failed=true; fi
     if [ "$old_moved" = true ]; then
-      mv "$stage/previous" "$install_dir" || { echo "vim-anywhere: restore installation from $stage/previous" >&2; restore_failed=true; }
+      mv "$stage/previous" "$install_dir" || { echo "nvim-anywhere: restore installation from $stage/previous" >&2; restore_failed=true; }
     fi
   fi
   if [ "$restore_failed" = true ]; then
-    echo "vim-anywhere: update backup retained at $stage" >&2
+    echo "nvim-anywhere: update backup retained at $stage" >&2
     return 1
   fi
   rm -rf "$stage"
@@ -36,9 +36,9 @@ trap 'exit 1' HUP INT TERM
 cp -R "$install_dir" "$stage/next"
 git -C "$stage/next" pull --ff-only
 if [[ $OSTYPE == darwin* ]]; then
-  service="$HOME/Library/Services/VimAnywhere.workflow"
+  service="$HOME/Library/Services/NvimAnywhere.workflow"
   mkdir -p "$HOME/Library/Services"
-  cp -R "$stage/next/VimAnywhere.workflow" "$stage/next.workflow"
+  cp -R "$stage/next/NvimAnywhere.workflow" "$stage/next.workflow"
 fi
 mv "$install_dir" "$stage/previous"
 old_moved=true
@@ -53,4 +53,4 @@ if [[ $OSTYPE == darwin* ]]; then
   service_installed=true
 fi
 complete=true
-echo 'vim-anywhere has been successfully updated!'
+echo 'nvim-anywhere has been successfully updated!'
