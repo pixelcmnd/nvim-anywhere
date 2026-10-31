@@ -84,17 +84,23 @@ elif [ "$kind" = mvim ] || [ "$kind" = gvim ]; then
 else
   set -- "$file"
 fi
-if "$binary" "$@" && [ ! -e "$NVIM_ANYWHERE_CANCEL_FILE" ]; then
-  if [ "$platform" = mac ]; then
-    LANG=en_US.UTF-8 pbcopy < "$file"
-  else
-    xclip -selection clipboard < "$file"
-  fi
+if "$binary" "$@"; then
+  code=0
 else
   code=$?
-  [ "$code" -ne 0 ] || code=1
+fi
+# Cancellation is an expected outcome, not an Automator action failure.
+if [ -e "$NVIM_ANYWHERE_CANCEL_FILE" ]; then
+  exit 0
+fi
+if [ "$code" -ne 0 ]; then
   printf 'nvim-anywhere: editor exited with status %s; clipboard unchanged\n' "$code" >&2
   exit "$code"
+fi
+if [ "$platform" = mac ]; then
+  LANG=en_US.UTF-8 pbcopy < "$file"
+else
+  xclip -selection clipboard < "$file"
 fi
 if [ "$platform" = mac ] && [ "$auto_paste" = true ]; then
   restore

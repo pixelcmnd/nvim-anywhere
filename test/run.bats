@@ -19,9 +19,10 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   make_stub neovide 'exit 9'
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 9 ]; [ "$(cat "$HOME/clipboard")" = original ]
-  make_stub neovide 'touch "$NVIM_ANYWHERE_CANCEL_FILE"'
+  make_stub neovide 'touch "$NVIM_ANYWHERE_CANCEL_FILE"; exit 1'
   run_script darwin "$REPO_ROOT/bin/run"
-  [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+  [[ "$output" != *"editor exited"* ]]
 }
 @test "custom path containing spaces and explicit override" {
   mkdir -p "$HOME/my editors" "$HOME/.config/nvim-anywhere"
@@ -79,7 +80,7 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   echo original > "$HOME/clipboard"
   make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE -c "$7" -c NvimAnywhereCancel; exit 0'
   run_script darwin "$REPO_ROOT/bin/run"
-  [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
   [ -n "$(find "$TMPDIR" -name "*.cancel" -print)" ]
 }
 @test "q! cancels without copying, while q and wq complete" {
@@ -88,7 +89,7 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   echo original > "$HOME/clipboard"
   export TEST_QUIT='q!'
   run_script darwin "$REPO_ROOT/bin/run"
-  [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
   export TEST_QUIT=q
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 0 ]; [ ! -s "$HOME/clipboard" ]
@@ -124,5 +125,15 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   echo original > "$HOME/clipboard"
   make_stub neovide '"$REAL_NVIM" --headless -u NONE -i NONE -c "$7" -c VimAnywhereCancel; exit 0'
   run_script darwin "$REPO_ROOT/bin/run"
-  [ "$status" -ne 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = original ]
+}
+@test "cancellation restores focus and never pastes even if editor exits nonzero" {
+  mkdir -p "$HOME/.config/nvim-anywhere"
+  printf 'auto_paste=true\n' > "$HOME/.config/nvim-anywhere/config"
+  echo original > "$HOME/clipboard"
+  make_stub osascript 'case "$1" in *current_app.scpt) echo 123 ;; *restore_app.scpt) echo restored > "$HOME/restored" ;; *paste.scpt) echo pasted > "$HOME/pasted" ;; esac'
+  make_stub neovide 'touch "$NVIM_ANYWHERE_CANCEL_FILE"; exit 1'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ -f "$HOME/restored" ]; [ ! -e "$HOME/pasted" ]
+  [ "$(cat "$HOME/clipboard")" = original ]
 }
