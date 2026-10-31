@@ -1,147 +1,96 @@
 #!/bin/bash
-#
-# vim-anywhere - use Vim whenever, wherever
-# Author: Chris Knadler
-# Homepage: https://www.github.com/cknadler/vim-anywhere
-#
-# Installs vim-anywhere. Intended for use via curl:
-#
-#   $ curl -fsSL https://raw.github.com/cknadler/vim-anywhere/master/install | bash
-
 set -e
-
-###
-# opts
-###
-
-while getopts ":v" opt; do
-  case "$opt" in
-    v) set -x ;;
-    \?) echo "Invalid option: -$OPTARG" >&2 ;;
-  esac
+umask 077
+PATH="$PATH:$HOME/.nix-profile/bin:/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
+export PATH
+source_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+install_dir="$HOME/.vim-anywhere"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/vim-anywhere/config"
+selected=
+if [ -f "$config" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in editor=*) selected=${line#editor=} ;; esac
+  done < "$config"
+fi
+case "$OSTYPE" in
+  darwin*) selected=${VIM_ANYWHERE_EDITOR:-${selected:-neovide}} ;;
+  linux*) selected=${VIM_ANYWHERE_EDITOR:-${selected:-gvim}} ;;
+  *) echo "vim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
+esac
+require() { command -v "$1" >/dev/null 2>&1 || { echo "vim-anywhere: requires $1" >&2; exit 1; }; }
+require git
+case "$selected" in
+  */*) [ -f "$selected" ] && [ -x "$selected" ] || { echo "vim-anywhere: editor not executable: $selected" >&2; exit 1; } ;;
+  *) require "$selected" ;;
+esac
+case "${selected##*/}" in neovide) require nvim ;; esac
+case "$OSTYPE" in
+  linux*) require xclip; if ! command -v gconftool >/dev/null && ! command -v gsettings >/dev/null; then echo 'vim-anywhere: requires gsettings or gconftool' >&2; exit 1; fi ;;
+esac
+[ -d "$source_dir/.git" ] || { echo 'vim-anywhere: run install from a local Git checkout of this fork' >&2; exit 1; }
+if [ "$source_dir" = "$install_dir" ]; then echo 'vim-anywhere: already installed; use update instead' >&2; exit 1; fi
+stage=$(mktemp -d "$HOME/.vim-anywhere-stage.XXXXXXXX")
+installed=false
+finished=false
+cleanup() {
+  if [ "$finished" != true ] && [ "$installed" = true ]; then
+    rm -rf "$install_dir"
+    if [ -n "${backup:-}" ]; then mv "$backup" "$install_dir"; fi
+    if [ "${service_changed:-false}" = true ]; then
+      rm -rf "$service"
+      if [ -n "${service_backup:-}" ]; then mv "$service_backup" "$service"; fi
+    fi
+  fi
+  [ -z "$stage" ] || rm -rf "$stage"
+}
+trap cleanup EXIT
+git clone --quiet "$source_dir" "$stage/repo"
+# Include the current checkout, including intentional uncommitted changes.
+for path in bin script VimAnywhere.workflow install update uninstall README.md FAQ.md CONTRIBUTING.md; do
+  rm -rf "$stage/repo/$path"
+  cp -R "$source_dir/$path" "$stage/repo/$path"
 done
-
-###
-# defs
-###
-
-err() { echo -e "$@" 1>&2; }
-
-check_installed() { hash "$1" &> /dev/null; }
-
-require_installed() {
-  if ! check_installed "$1"; then
-    err "vim-anywhere requires $1 to function"
-    if [[ "$2" != "" ]]; then echo "$2"; fi
-    exit 1
-  fi
-}
-
-require_one_installed() {
-  for file in "$@"; do
-    check_installed "$file" && return
-  done
-  err "vim-anywhere requires one of the following to be installed:\n$*"
-  exit 1
-}
-
-AW_PATH=$HOME/.vim-anywhere
-AW_URL='https://github.com/cknadler/vim-anywhere'
-
-###
-# pre-installation checks
-###
-
-# Check if vim-anywhere is already installed. If so, remove the previous
-# installation.
-if [ -e "$AW_PATH" ]; then
-  echo 'Cleaning up previous installation...'
-  rm -rf "$AW_PATH"
-  # TODO: It would be nice to have an option for user input here
-  # Reinstall vim-anywhere (y/n)? ... or something like that
+if [ -e "$install_dir" ] || [ -L "$install_dir" ]; then
+  backup=$(mktemp -d "$HOME/.vim-anywhere-backup.XXXXXXXX")
+  rmdir "$backup"
+  mv "$install_dir" "$backup"
+  echo "Previous installation preserved at $backup"
 fi
-
-require_installed git
-
-# if we are in a git repo, unset env vars
-if git rev-parse --git-dir &> /dev/null; then
-  # Word splitting is intentional: each var name must be a separate argument to unset
-  # shellcheck disable=SC2046
-  unset $(git rev-parse --local-env-vars) &> /dev/null
-fi
-
-# Linux specific checks
-if [[ $OSTYPE == "linux-gnu" ]]; then
-  require_one_installed gconftool gsettings
-  require_installed gvim
-  require_installed xclip
-
-# OSX specific checks
-elif [[ $OSTYPE == "darwin"* ]]; then
-  require_installed mvim "Run 'brew install macvim'."
-
-# Unsupported OS
-else
-  echo "OS '$OSTYPE' is not supported!"
+if ! mv "$stage/repo" "$install_dir"; then
+  [ -z "${backup:-}" ] || mv "$backup" "$install_dir"
   exit 1
 fi
-
-###
-# installation
-###
-
-echo "Installing vim-anywhere..."
-
-git clone "$AW_URL" "$AW_PATH"
-
-# Linux install
-if [[ $OSTYPE == "linux-gnu" ]]; then
-  name="vim-anywhere"
-  binding="<CTRL><ALT>v"
-  action="$AW_PATH/bin/run"
-
-  # We always try gconftool first. It is deprecated so it won't be on newer
-  # installs. If it's installed, we know we are on older versions of Gnome.
-  if check_installed gconftool; then
-    kbd_path=/desktop/gnome/keybindings/vim-anywhere
-    gconftool -t str --set $kbd_path/name "$name"
-    gconftool -t str --set $kbd_path/binding "$binding"
-    gconftool -t str --set $kbd_path/action "$action"
-
-  # At this point, we know we are using dconf, the currently supported settings
-  # manager. gsettings is the gnome client for dconf.
-  else
-    media_keys=org.gnome.settings-daemon.plugins.media-keys
-    custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-    kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
-    new_bindings=$(gsettings get $media_keys custom-keybindings | sed -e"s>'\]>','$kbd_path']>"| sed -e"s>@as \[\]>['$kbd_path']>")
-    gsettings set $media_keys custom-keybindings "$new_bindings"
-    gsettings set $custom_kbd:$kbd_path name "$name"
-    gsettings set $custom_kbd:$kbd_path binding "$binding"
-    gsettings set $custom_kbd:$kbd_path command "$action"
-  fi
-
-# OSX install
-elif [[ $OSTYPE == "darwin"* ]]; then
-  # store the absolute path to the mvim executable
-  which mvim > "$AW_PATH/.path"
-
-  # install the workflow as a service
-  mkdir -p "$HOME/Library/Services"
-  cp -R "$AW_PATH/VimAnywhere.workflow" "$HOME/Library/Services"
-
-  # Set default keybindings
-  defaults write pbs NSServicesStatus '{
-    "(null) - VimAnywhere - runWorkflowAsService" = {
-      "key_equivalent" = "@^v";
-    };
-    "org.vim.MacVim - MacVim/New MacVim Buffer With Selection - openSelection" = {
-      "key_equivalent" = "@^v";
-    };
-  }'
-
-  # Activating Finder causes the new keybindings to become active
-  osascript -e "activate application \"Finder\""
-fi
-
-echo "vim-anywhere has been successfully installed!"
+installed=true
+case "$OSTYPE" in
+  darwin*)
+    mkdir -p "$HOME/Library/Services"
+    service="$HOME/Library/Services/VimAnywhere.workflow"
+    if [ -e "$service" ]; then
+      service_backup=$(mktemp -d "$HOME/Library/Services/.VimAnywhere-backup.XXXXXXXX")
+      rmdir "$service_backup"
+      mv "$service" "$service_backup"
+      echo "Previous workflow preserved at $service_backup"
+    fi
+    service_changed=true
+    cp -R "$install_dir/VimAnywhere.workflow" "$service"
+    echo 'Set the VimAnywhere shortcut in System Settings > Keyboard > Keyboard Shortcuts > Services.' ;;
+  linux*)
+    name=vim-anywhere; binding='<CTRL><ALT>v'; action="$install_dir/bin/run"
+    if command -v gconftool >/dev/null; then
+      kbd_path=/desktop/gnome/keybindings/vim-anywhere
+      gconftool -t str --set "$kbd_path/name" "$name"
+      gconftool -t str --set "$kbd_path/binding" "$binding"
+      gconftool -t str --set "$kbd_path/action" "$action"
+    else
+      media_keys=org.gnome.settings-daemon.plugins.media-keys
+      custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
+      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
+      bindings=$(gsettings get "$media_keys" custom-keybindings)
+      case "$bindings" in *"'$kbd_path'"*) ;; *) bindings=$(printf '%s' "$bindings" | sed -e "s>']>','$kbd_path']>" -e "s>@as \[\]>['$kbd_path']>"); gsettings set "$media_keys" custom-keybindings "$bindings" ;; esac
+      gsettings set "$custom_kbd:$kbd_path" name "$name"
+      gsettings set "$custom_kbd:$kbd_path" binding "$binding"
+      gsettings set "$custom_kbd:$kbd_path" command "$action"
+    fi ;;
+esac
+finished=true
+echo 'vim-anywhere has been successfully installed!'

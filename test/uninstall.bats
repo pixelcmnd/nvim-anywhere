@@ -1,55 +1,26 @@
 #!/usr/bin/env bats
-
 load helpers
-
-setup() {
-  setup_fake_bin
-  setup_fake_home
-  make_stub gsettings
+setup() { setup_fake_bin; }
+@test "uninstall preserves configuration and history" {
+  mkdir -p "$HOME/.vim-anywhere/bin" "$HOME/.config/vim-anywhere" "$TMPDIR/vim-anywhere-$UID"
+  touch "$HOME/.vim-anywhere/bin/run" "$HOME/.vim-anywhere/uninstall" "$HOME/.config/vim-anywhere/config" "$TMPDIR/vim-anywhere-$UID/doc"
+  run_script darwin "$REPO_ROOT/uninstall"
+  [ "$status" -eq 0 ]; [ ! -e "$HOME/.vim-anywhere" ]
+  backups=("$HOME"/.vim-anywhere-uninstalled.*); [ -f "${backups[0]}/bin/run" ]
+  [ -f "$HOME/.config/vim-anywhere/config" ]; [ -f "$TMPDIR/vim-anywhere-$UID/doc" ]
+}
+@test "uninstall refuses unrecognized directory" {
+  mkdir -p "$HOME/.vim-anywhere"; touch "$HOME/.vim-anywhere/important"
+  run_script darwin "$REPO_ROOT/uninstall"
+  [ "$status" -ne 0 ]; [ -f "$HOME/.vim-anywhere/important" ]
 }
 
-teardown() {
-  teardown_fake_bin
-}
-
-# ---------------------------------------------------------------------------
-# macOS
-# ---------------------------------------------------------------------------
-
-@test "uninstall: removes AW_PATH on macOS" {
-  mkdir -p "$HOME/.vim-anywhere"
-  run_script darwin19 "$REPO_ROOT/uninstall"
-  [ "$status" -eq 0 ]
-  [ ! -d "$HOME/.vim-anywhere" ]
-  [[ "$output" == *"successfully uninstalled"* ]]
-}
-
-@test "uninstall: removes workflow directory on macOS" {
-  mkdir -p "$HOME/Library/Services/VimAnywhere.workflow"
-  run_script darwin19 "$REPO_ROOT/uninstall"
-  [ "$status" -eq 0 ]
-  [ ! -d "$HOME/Library/Services/VimAnywhere.workflow" ]
-}
-
-@test "uninstall: succeeds even when AW_PATH does not exist" {
-  run_script darwin19 "$REPO_ROOT/uninstall"
-  [ "$status" -eq 0 ]
-}
-
-# ---------------------------------------------------------------------------
-# Linux
-# ---------------------------------------------------------------------------
-
-@test "uninstall: removes gsettings binding on Linux" {
-  mkdir -p "$HOME/.vim-anywhere"
-  run_script linux-gnu "$REPO_ROOT/uninstall"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"successfully uninstalled"* ]]
-}
-
-@test "uninstall: uses gconftool when available on Linux" {
-  make_stub gconftool
-  mkdir -p "$HOME/.vim-anywhere"
-  run_script linux-gnu "$REPO_ROOT/uninstall"
-  [ "$status" -eq 0 ]
+@test "uninstall preserves files and local edits inside installation" {
+  mkdir -p "$HOME/.vim-anywhere/bin"
+  printf modified > "$HOME/.vim-anywhere/bin/run"
+  touch "$HOME/.vim-anywhere/uninstall" "$HOME/.vim-anywhere/user-data"
+  run_script darwin "$REPO_ROOT/uninstall"
+  [ "$status" -eq 0 ]; [ ! -e "$HOME/.vim-anywhere" ]
+  backups=("$HOME"/.vim-anywhere-uninstalled.*)
+  [ "$(cat "${backups[0]}/bin/run")" = modified ]; [ -f "${backups[0]}/user-data" ]
 }

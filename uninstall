@@ -1,56 +1,27 @@
 #!/bin/bash
-#
-# vim-anywhere - use Vim whenever, wherever
-# Author: Chris Knadler
-# Homepage: https://www.github.com/cknadler/vim-anywhere
-#
-# Uninstalls vim-anywhere
-
 set -e
-
-###
-# opts
-###
-
-while getopts ":v" opt; do
-  case "$opt" in
-    v) set -x ;;
-    \?) echo "Invalid option: -$OPTARG" >&2 ;;
-  esac
-done
-
-###
-# defs
-###
-
-check_installed() { hash "$1" &> /dev/null; }
-
-AW_PATH=$HOME/.vim-anywhere
-DOC_PATH="${TMPDIR:-/tmp}/vim-anywhere"
-
-###
-# uninstall
-###
-
-rm -rf "$AW_PATH" "$DOC_PATH"
-
-# Linux uninstall
-if [[ $OSTYPE == "linux-gnu" ]]; then
-  if check_installed gconftool; then
-    kbd_path=/desktop/gnome/keybindings/vim-anywhere
-    gconftool --unset $kbd_path/name
-    gconftool --unset $kbd_path/binding
-    gconftool --unset $kbd_path/action
-
-  else # gsettings must be installed
-    custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-    kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
-    gsettings reset-recursively $custom_kbd:$kbd_path
+install_dir="$HOME/.vim-anywhere"
+if [ -e "$install_dir" ]; then
+  if [ ! -f "$install_dir/bin/run" ] || [ ! -f "$install_dir/uninstall" ]; then
+    echo "vim-anywhere: refusing to remove unrecognized directory $install_dir" >&2; exit 1
   fi
-
-# OSX uninstall
-elif [[ $OSTYPE == "darwin"* ]]; then
-  rm -rf "$HOME/Library/Services/VimAnywhere.workflow"
+  backup=$(mktemp -d "$HOME/.vim-anywhere-uninstalled.XXXXXXXX")
+  rmdir "$backup"
+  mv "$install_dir" "$backup"
+  echo "Installation preserved at $backup"
 fi
-
-echo "vim-anywhere has been successfully uninstalled!"
+case "$OSTYPE" in
+  darwin*)
+    service="$HOME/Library/Services/VimAnywhere.workflow"
+    if [ -f "$service/Contents/document.wflow" ] && grep -q '.vim-anywhere/bin/run' "$service/Contents/document.wflow"; then rm -rf "$service"; fi ;;
+  linux*)
+    if command -v gconftool >/dev/null; then
+      kbd_path=/desktop/gnome/keybindings/vim-anywhere
+      for key in name binding action; do gconftool --unset "$kbd_path/$key"; done
+    elif command -v gsettings >/dev/null; then
+      custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
+      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/
+      gsettings reset-recursively "$custom_kbd:$kbd_path"
+    else echo 'vim-anywhere: no keybinding tool found; remove the shortcut manually' >&2; fi ;;
+esac
+echo 'vim-anywhere has been uninstalled; configuration and editing history were preserved.'
