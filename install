@@ -48,7 +48,7 @@ cleanup() {
 trap cleanup EXIT
 git clone --quiet "$source_dir" "$stage/repo"
 # Include the current checkout, including intentional uncommitted changes.
-for path in bin script NvimAnywhere.workflow install update uninstall README.md FAQ.md CONTRIBUTING.md; do
+for path in bin script NvimAnywhere.workflow install update uninstall README.md FAQ.md LICENSE; do
   rm -rf "$stage/repo/$path"
   cp -R "$source_dir/$path" "$stage/repo/$path"
 done
