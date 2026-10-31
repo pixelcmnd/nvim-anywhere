@@ -7,7 +7,8 @@ setup_fake_bin() {
   export PATH="$FAKE_BIN:/usr/bin:/bin"
   make_stub osascript 'case "$1" in *current_app.scpt) echo 123 ;; esac'
   make_stub pbcopy 'cat > "$HOME/clipboard"'
-  make_stub xclip 'cat > "$HOME/clipboard"'
+  make_stub wl-copy 'cat > "$HOME/clipboard"'
+  export WAYLAND_DISPLAY=wayland-test
   make_stub nvim 'exit 0'
 }
 make_stub() {

@@ -16,9 +16,11 @@ setup() { setup_fake_bin; make_stub neovide; make_stub gvim; make_stub gsettings
   run_script darwin "$REPO_ROOT/install"
   [ "$status" -ne 0 ]; [ -f "$HOME/.nvim-anywhere/data" ]
 }
-@test "Linux installation succeeds" {
+@test "Linux installation does not modify desktop shortcut settings" {
+  make_stub gsettings 'echo called > "$HOME/gsettings-called"; exit 1'
   run_script linux-gnu "$REPO_ROOT/install"
   [ "$status" -eq 0 ]; [ -f "$HOME/.nvim-anywhere/bin/run" ]
+  [ ! -e "$HOME/gsettings-called" ]
 }
 @test "reinstallation keeps previous installation" {
   run_script darwin "$REPO_ROOT/install"; [ "$status" -eq 0 ]

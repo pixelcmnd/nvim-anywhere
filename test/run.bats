@@ -38,11 +38,31 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -ne 0 ]; [[ "$output" == *'editor executable not found'* ]]
 }
-@test "Linux uses gvim flags and xclip" {
-  make_stub gvim 'printf "%s\n" "$@" > "$HOME/args"; printf linux > "${@: -1}"'
+@test "Linux uses Neovide and Wayland clipboard" {
+  make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; printf linux > "$4"'
   run_script linux-gnu "$REPO_ROOT/bin/run"
   [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = linux ]
-  grep -q -- --nofork "$HOME/args"
+  grep -q -- --no-fork "$HOME/args"
+}
+@test "Linux rejects a missing Wayland session" {
+  unset WAYLAND_DISPLAY
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -ne 0 ]; [[ "$output" == *"Wayland session is required"* ]]
+}
+@test "Linux copies empty text and skips clipboard on cancellation" {
+  echo old > "$HOME/clipboard"
+  make_stub neovide 'touch "$NVIM_ANYWHERE_CANCEL_FILE"'
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(cat "$HOME/clipboard")" = old ]
+  make_stub neovide 'true'
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ ! -s "$HOME/clipboard" ]
+}
+@test "Linux rejects gvim" {
+  export NVIM_ANYWHERE_EDITOR=gvim
+  make_stub gvim
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -ne 0 ]; [[ "$output" == *"not supported on Linux"* ]]
 }
 @test "sessions create unique private history files" {
   make_stub neovide 'true'
@@ -136,4 +156,11 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   run_script darwin "$REPO_ROOT/bin/run"
   [ "$status" -eq 0 ]; [ -f "$HOME/restored" ]; [ ! -e "$HOME/pasted" ]
   [ "$(cat "$HOME/clipboard")" = original ]
+}
+@test "Wayland clipboard failure is reported and history remains" {
+  make_stub neovide 'printf saved > "$4"'
+  make_stub wl-copy 'exit 7'
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -ne 0 ]; [[ "$output" == *"Wayland clipboard copy failed"* ]]
+  [ -n "$(find "$TMPDIR/nvim-anywhere-$UID" -type f -name 'doc.*' -print)" ]
 }

@@ -14,14 +14,6 @@ case "$OSTYPE" in
   darwin*)
     service="$HOME/Library/Services/NvimAnywhere.workflow"
     if [ -f "$service/Contents/document.wflow" ] && grep -q '.nvim-anywhere/bin/run' "$service/Contents/document.wflow"; then rm -rf "$service"; fi ;;
-  linux*)
-    if command -v gconftool >/dev/null; then
-      kbd_path=/desktop/gnome/keybindings/nvim-anywhere
-      for key in name binding action; do gconftool --unset "$kbd_path/$key"; done
-    elif command -v gsettings >/dev/null; then
-      custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/nvim-anywhere/
-      gsettings reset-recursively "$custom_kbd:$kbd_path"
-    else echo 'nvim-anywhere: no keybinding tool found; remove the shortcut manually' >&2; fi ;;
+  linux*) echo 'Remove the nvim-anywhere shortcut from your desktop or compositor configuration.' ;;
 esac
 echo 'nvim-anywhere has been uninstalled; configuration and editing history were preserved.'

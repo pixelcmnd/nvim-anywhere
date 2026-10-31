@@ -16,7 +16,7 @@ if [ -f "$config" ]; then
 fi
 case "$OSTYPE" in
   darwin*) selected=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${selected:-neovide}}} ;;
-  linux*) selected=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${selected:-gvim}}} ;;
+  linux*) selected=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${selected:-neovide}}} ;;
   *) echo "nvim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
 esac
 require() { command -v "$1" >/dev/null 2>&1 || { echo "nvim-anywhere: requires $1" >&2; exit 1; }; }
@@ -27,7 +27,9 @@ case "$selected" in
 esac
 case "${selected##*/}" in neovide) require nvim ;; esac
 case "$OSTYPE" in
-  linux*) require xclip; if ! command -v gconftool >/dev/null && ! command -v gsettings >/dev/null; then echo 'nvim-anywhere: requires gsettings or gconftool' >&2; exit 1; fi ;;
+  linux*)
+    case "${selected##*/}" in gvim|mvim) echo 'nvim-anywhere: mvim and gvim are not supported on Linux; use a Wayland editor' >&2; exit 1 ;; esac
+    require wl-copy ;;
 esac
 [ -d "$source_dir/.git" ] || { echo 'nvim-anywhere: run install from a local Git checkout of this fork' >&2; exit 1; }
 if [ "$source_dir" = "$install_dir" ]; then echo 'nvim-anywhere: already installed; use update instead' >&2; exit 1; fi
@@ -78,29 +80,9 @@ case "$OSTYPE" in
     if [ -e "$HOME/Library/Services/VimAnywhere.workflow" ]; then
       echo 'The old VimAnywhere service is still installed; disable its shortcut before assigning it to NvimAnywhere.'
     fi
-    echo 'Set the NvimAnywhere shortcut in System Settings > Keyboard > Keyboard Shortcuts > Services.' ;;
+    echo 'Set Control+Option+Command+I for NvimAnywhere in System Settings > Keyboard > Keyboard Shortcuts > Services.' ;;
   linux*)
-    name=nvim-anywhere; binding='<CTRL><ALT>v'; action="$install_dir/bin/run"
-    if command -v gconftool >/dev/null; then
-      kbd_path=/desktop/gnome/keybindings/nvim-anywhere
-      gconftool -t str --set "$kbd_path/name" "$name"
-      gconftool -t str --set "$kbd_path/binding" "$binding"
-      gconftool -t str --set "$kbd_path/action" "$action"
-    else
-      media_keys=org.gnome.settings-daemon.plugins.media-keys
-      custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-      kbd_path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/nvim-anywhere/
-      bindings=$(gsettings get "$media_keys" custom-keybindings)
-      case "$bindings" in
-        *"'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/vim-anywhere/'"*)
-          binding=''
-          echo 'The old vim-anywhere shortcut is still configured; assign a shortcut to nvim-anywhere after removing the old one.' ;;
-      esac
-      case "$bindings" in *"'$kbd_path'"*) ;; *) bindings=$(printf '%s' "$bindings" | sed -e "s>']>','$kbd_path']>" -e "s>@as \[\]>['$kbd_path']>"); gsettings set "$media_keys" custom-keybindings "$bindings" ;; esac
-      gsettings set "$custom_kbd:$kbd_path" name "$name"
-      gsettings set "$custom_kbd:$kbd_path" binding "$binding"
-      gsettings set "$custom_kbd:$kbd_path" command "$action"
-    fi ;;
+    echo 'Configure Control+Alt+Super+I in your desktop or compositor; see the README.' ;;
 esac
 finished=true
 echo 'nvim-anywhere has been successfully installed!'

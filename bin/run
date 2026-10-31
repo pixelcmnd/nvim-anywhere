@@ -22,7 +22,7 @@ if [ -f "$config" ]; then
 fi
 case "$OSTYPE" in
   darwin*) platform=mac; default=neovide ;;
-  linux*) platform=linux; default=gvim ;;
+  linux*) platform=linux; default=neovide ;;
   *) echo "nvim-anywhere: unsupported platform: $OSTYPE" >&2; exit 1 ;;
 esac
 editor=${NVIM_ANYWHERE_EDITOR:-${VIM_ANYWHERE_EDITOR:-${editor_config:-$default}}}
@@ -34,6 +34,10 @@ if [ -z "$binary" ] || [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
   printf 'nvim-anywhere: editor executable not found or not executable: %s\n' "$editor" >&2; exit 1
 fi
 case "$kind" in neovide|mvim|gvim) ;; *) kind=custom ;; esac
+if [ "$platform" = linux ]; then
+  if [ -z "${WAYLAND_DISPLAY:-}" ]; then echo 'nvim-anywhere: a Wayland session is required (WAYLAND_DISPLAY is unset)' >&2; exit 1; fi
+  case "$kind" in mvim|gvim) echo 'nvim-anywhere: mvim and gvim are not supported on Linux; use a Wayland editor' >&2; exit 1 ;; esac
+fi
 if [ "$platform" = mac ]; then
   for utility in osascript pbcopy; do
     command -v "$utility" >/dev/null || { echo "nvim-anywhere: missing $utility" >&2; exit 1; }
@@ -42,7 +46,7 @@ if [ "$platform" = mac ]; then
   restore() { osascript "$root/script/restore_app.scpt" "$app" || echo 'nvim-anywhere: could not restore focus' >&2; }
   trap restore EXIT
 else
-  command -v xclip >/dev/null || { echo 'nvim-anywhere: missing xclip' >&2; exit 1; }
+  command -v wl-copy >/dev/null || { echo 'nvim-anywhere: missing wl-copy (install wl-clipboard)' >&2; exit 1; }
 fi
 history="${TMPDIR:-/tmp}/nvim-anywhere-$UID"
 # Refuse symlinks and directories owned by somebody else.
@@ -100,7 +104,10 @@ fi
 if [ "$platform" = mac ]; then
   LANG=en_US.UTF-8 pbcopy < "$file"
 else
-  xclip -selection clipboard < "$file"
+  if ! wl-copy --type text/plain < "$file"; then
+    echo "nvim-anywhere: Wayland clipboard copy failed; history retained at $file" >&2
+    exit 1
+  fi
 fi
 if [ "$platform" = mac ] && [ "$auto_paste" = true ]; then
   restore
