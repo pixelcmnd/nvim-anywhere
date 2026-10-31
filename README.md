@@ -81,7 +81,8 @@ on Linux. Automatic paste is available only on macOS.
 ### Nix on Linux and macOS
 
 This repository provides flake packages for `x86_64-linux`, `aarch64-linux`,
-`x86_64-darwin`, and `aarch64-darwin`. Add it as an input to your NixOS,
+and `aarch64-darwin`. Current unstable nixpkgs no longer supports
+`x86_64-darwin`. Add the flake as an input to your NixOS,
 nix-darwin, or Home Manager flake, then add the package to
 `environment.systemPackages` or `home.packages`, respectively:
 

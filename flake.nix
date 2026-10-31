@@ -8,7 +8,7 @@
     nixpkgs,
     ...
   }: let
-    systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
+    systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
   in {
     homeManagerModules.default = {
@@ -105,7 +105,7 @@
         meta = {
           description = "Edit text anywhere using Neovide on macOS and Wayland";
           license = pkgs.lib.licenses.mit;
-          platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
+          platforms = systems;
           mainProgram = "nvim-anywhere";
         };
       };
