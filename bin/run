@@ -62,8 +62,21 @@ cancel_command='execute "source" fnameescape($NVIM_ANYWHERE_SESSION_SCRIPT)'
 opts=()
 case "$kind" in
   neovide)
-    nvim=$(command -v nvim || true)
-    if [ -z "$nvim" ]; then echo 'nvim-anywhere: nvim not found in PATH' >&2; exit 1; fi
+    if [ -n "${NEOVIM_BIN:-}" ]; then
+      case "$NEOVIM_BIN" in
+        */*) nvim=$NEOVIM_BIN ;;
+        *) nvim=$(command -v "$NEOVIM_BIN" || true) ;;
+      esac
+      if [ -z "$nvim" ]; then
+        echo "nvim-anywhere: NEOVIM_BIN executable not found: $NEOVIM_BIN" >&2; exit 1
+      fi
+    else
+      nvim=$(command -v nvim || true)
+      if [ -z "$nvim" ]; then nvim=${NVIM_ANYWHERE_FALLBACK_NVIM:-}; fi
+    fi
+    if [ -z "$nvim" ] || [ ! -f "$nvim" ] || [ ! -x "$nvim" ]; then
+      echo "nvim-anywhere: Neovim executable not found or not executable: ${nvim:-nvim}" >&2; exit 1
+    fi
     # Explicitly override Neovide's fork and server settings; no instance reuse.
     unset NEOVIDE_SERVER
     # A configured remote server could outlive this process, invalidating completion.

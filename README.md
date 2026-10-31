@@ -96,8 +96,9 @@ inputs.nvim-anywhere.packages.${pkgs.stdenv.hostPlatform.system}.default
 
 Use this expression as an item in the relevant package list. Alternatively,
 `nix profile install github:pixelcmnd/nvim-anywhere` installs it to your profile.
-The package wraps Neovide and Neovim in its runtime `PATH` and adds
-wl-clipboard on Linux; it still loads your normal Neovim configuration. Use
+The package supplies Neovide and a fallback Neovim, and adds wl-clipboard on
+Linux. It prefers `nvim` from your PATH and common Nix profiles over the bundled
+fallback, so a Nixvim-managed executable can provide its plugin runtime. Use
 `follows` as above to pin nixpkgs through your consuming flake's lock file.
 This repository does not commit its own lock file. For a non-NixOS system,
 Neovide may need a graphics wrapper such as nixGL.
@@ -163,8 +164,11 @@ The scripts search the inherited `PATH`, `~/.nix-profile/bin`,
 Homebrew locations without reading shell startup files. For an editor in another
 location, specify an absolute path. Neovide also needs `nvim` on that search
 path; for a custom Nix profile, expose Neovim through one of those directories
-or the environment inherited by the service. Prefer stable profile paths over
-individual `/nix/store` paths, which change between generations. Legacy mvim and gvim on macOS retain support for
+or the environment inherited by the service. `NEOVIM_BIN` takes precedence over
+PATH when set, but GUI-launched services may not inherit it. For the macOS Quick
+Action, install your configured `nvim` in a common Nix profile so the service
+can find it. Prefer stable profile paths over individual `/nix/store` paths,
+which change between generations. Legacy mvim and gvim on macOS retain support for
 `~/.gvimrc.min` or `~/.vimrc.min`; Neovide does not use them.
 
 Save and exit with `:wq`. A normal `:q` also completes successfully, including

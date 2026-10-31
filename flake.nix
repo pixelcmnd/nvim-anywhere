@@ -92,7 +92,8 @@
           mkdir -p "$out/libexec/nvim-anywhere" "$out/bin"
           cp -R bin script "$out/libexec/nvim-anywhere/"
           makeWrapper "$out/libexec/nvim-anywhere/bin/run" "$out/bin/nvim-anywhere" \
-            --prefix PATH : ${pkgs.lib.makeBinPath ([pkgs.neovide pkgs.neovim pkgs.coreutils pkgs.gnugrep] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.wl-clipboard])}
+            --prefix PATH : ${pkgs.lib.makeBinPath ([pkgs.neovide pkgs.coreutils pkgs.gnugrep] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.wl-clipboard])} \
+            --set-default NVIM_ANYWHERE_FALLBACK_NVIM ${pkgs.lib.escapeShellArg "${pkgs.neovim}/bin/nvim"}
           ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
             mkdir -p "$out/share/nvim-anywhere"
             cp -R NvimAnywhere.workflow "$out/share/nvim-anywhere/"

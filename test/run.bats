@@ -164,3 +164,35 @@ setup() { setup_fake_bin; make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"; 
   [ "$status" -ne 0 ]; [[ "$output" == *"Wayland clipboard copy failed"* ]]
   [ -n "$(find "$TMPDIR/nvim-anywhere-$UID" -type f -name 'doc.*' -print)" ]
 }
+@test "Neovide uses an explicitly configured Neovim path with spaces" {
+  mkdir -p "$HOME/custom neovim"
+  printf '#!/bin/bash\nexit 0\n' > "$HOME/custom neovim/nvim"
+  chmod +x "$HOME/custom neovim/nvim"
+  export NEOVIM_BIN="$HOME/custom neovim/nvim"
+  make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(sed -n '3p' "$HOME/args")" = "$NEOVIM_BIN" ]
+}
+@test "invalid explicit Neovim does not fall back or change clipboard" {
+  export NEOVIM_BIN="$HOME/missing/nvim"
+  echo original > "$HOME/clipboard"
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -ne 0 ]; [[ "$output" == *'Neovim executable not found or not executable'* ]]
+  [ "$(cat "$HOME/clipboard")" = original ]
+}
+@test "a configured Neovim on PATH takes precedence over packaged fallback" {
+  export NVIM_ANYWHERE_FALLBACK_NVIM="$HOME/fallback/nvim"
+  make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"'
+  run_script linux-gnu "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(sed -n '3p' "$HOME/args")" = "$FAKE_BIN/nvim" ]
+}
+@test "Neovim in the Nix profile is found from a limited GUI PATH" {
+  rm "$FAKE_BIN/nvim"
+  mkdir -p "$HOME/.nix-profile/bin"
+  printf '#!/bin/bash\nexit 0\n' > "$HOME/.nix-profile/bin/nvim"
+  chmod +x "$HOME/.nix-profile/bin/nvim"
+  export NVIM_ANYWHERE_FALLBACK_NVIM="$HOME/fallback/nvim"
+  make_stub neovide 'printf "%s\n" "$@" > "$HOME/args"'
+  run_script darwin "$REPO_ROOT/bin/run"
+  [ "$status" -eq 0 ]; [ "$(sed -n '3p' "$HOME/args")" = "$HOME/.nix-profile/bin/nvim" ]
+}
