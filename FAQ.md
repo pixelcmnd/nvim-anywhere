@@ -1,13 +1,5 @@
-## Text doesn't automatically paste after I close vim
+## Why isn't text pasted automatically?
 
-This is by design currently. The readme has a blurb about this at the top.
-
-```
-Once invoked, vim-anywhere will open a buffer. Close it and its
-contents are copied to your clipboard and your previous application is
-refocused.
-```
-
-While this feature may be added in the future, for compatibility sake,
-it'll be optional or opt in.
-
+Clipboard-only operation is the default. You can opt into macOS simulated
+Command-V with `auto_paste=true` in the configuration file; see the README for
+permissions and limitations.
