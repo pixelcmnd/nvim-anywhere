@@ -78,15 +78,17 @@ Use a different binding if the suggested one is already in use. The compositor
 controls focus when Neovide closes; explicit focus restoration is not guaranteed
 on Linux. Automatic paste is available only on macOS.
 
-### Nix on Linux
+### Nix on Linux and macOS
 
-This repository provides a flake package for `x86_64-linux` and `aarch64-linux`.
-Add it as an input to your NixOS or Home Manager flake, then add the package to
+This repository provides flake packages for `x86_64-linux`, `aarch64-linux`,
+`x86_64-darwin`, and `aarch64-darwin`. Add it as an input to your NixOS,
+nix-darwin, or Home Manager flake, then add the package to
 `environment.systemPackages` or `home.packages`, respectively:
 
 ```nix
 # flake input
 inputs.nvim-anywhere.url = "github:pixelcmnd/nvim-anywhere";
+inputs.nvim-anywhere.inputs.nixpkgs.follows = "nixpkgs";
 
 # In a module that receives inputs and pkgs:
 inputs.nvim-anywhere.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -94,9 +96,42 @@ inputs.nvim-anywhere.packages.${pkgs.stdenv.hostPlatform.system}.default
 
 Use this expression as an item in the relevant package list. Alternatively,
 `nix profile install github:pixelcmnd/nvim-anywhere` installs it to your profile.
-The package wraps Neovide, Neovim, and wl-clipboard in its runtime `PATH`; it
-still loads your normal Neovim configuration. For a non-NixOS system, Neovide
-may need a graphics wrapper such as nixGL. The flake does not install shortcuts.
+The package wraps Neovide and Neovim in its runtime `PATH` and adds
+wl-clipboard on Linux; it still loads your normal Neovim configuration. Use
+`follows` as above to pin nixpkgs through your consuming flake's lock file.
+This repository does not commit its own lock file. For a non-NixOS system,
+Neovide may need a graphics wrapper such as nixGL.
+
+On macOS, Home Manager can install both the package and its Quick Action.
+Import the module in your Home Manager configuration and enable it:
+
+```nix
+{
+  imports = [ inputs.nvim-anywhere.homeManagerModules.default ];
+  programs.nvim-anywhere = {
+    enable = true;
+    # Optional: this is the default; set to false to leave the shortcut unchanged.
+    shortcut = "Ctrl+Option+Command+I";
+  };
+}
+```
+
+Ensure `inputs` is passed to Home Manager (for example via `extraSpecialArgs`).
+The module manages `~/Library/Services/NvimAnywhere.workflow` as a Home Manager
+link. If an unmanaged workflow already exists there, move it aside before
+activation. By default, Home Manager configures Control+Option+Command+I.
+Use a string such as `"Ctrl+Option+Command+I"` to choose a shortcut, or set
+`shortcut = false;` to leave the existing macOS shortcut unchanged. Modifiers
+are case-insensitive: `Ctrl`/`Control`, `Option`/`Opt`/`Alt`, `Cmd`/`Command`,
+and `Shift` are accepted, followed by one letter or digit. macOS may require
+logging out and back in before a changed shortcut is recognized. Choose a
+nonconflicting shortcut; the module does not detect conflicts. The module
+currently supports macOS only.
+
+Without Home Manager, the macOS package provides
+`share/nvim-anywhere/NvimAnywhere.workflow` to copy into `~/Library/Services`
+from your Nix profile. The Nix workflow searches common Nix profiles for
+`nvim-anywhere`, so make the package available in one of those profiles.
 
 ## Editor and behavior
 

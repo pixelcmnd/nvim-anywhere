@@ -3,3 +3,6 @@
 
 # Claude Code personal settings (project-level settings.json is committed, local overrides are not)
 .claude/settings.local.json
+
+# Pin flake inputs in the consuming configuration.
+flake.lock
