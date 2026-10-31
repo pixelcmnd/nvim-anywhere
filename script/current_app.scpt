@@ -1,9 +1,2 @@
--- vim-anywhere - use Vim whenever, wherever
--- Author: Chris Knadler
--- Homepage: https://www.github.com/cknadler/vim-anywhere
---
--- Get the current application's name
-
-tell application "System Events"
-  copy (name of application processes whose frontmost is true) to stdout
-end tell
+-- Use the process ID, avoiding application-name quoting and ambiguity.
+tell application "System Events" to return unix id of first application process whose frontmost is true

@@ -1,71 +1,20 @@
-# Shared setup helpers for vim-anywhere bats tests.
-#
-# Each test file sources this via `load helpers`.
-
+REAL_NVIM=$(command -v nvim || true)
+export REAL_NVIM
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FAKE_BIN="$BATS_TMPDIR/fake-bin"
-# Excludes Homebrew dirs (/opt/homebrew/bin, /usr/local/bin) so only FAKE_BIN
-# stubs and essential POSIX tools are found.
-ISOLATED_PATH="$FAKE_BIN:/usr/bin:/bin"
-
-# Write an executable stub to FAKE_BIN. $body defaults to `true` (no-op).
-make_stub() {
-  local name="$1"
-  local body="${2:-true}"
-  printf '#!/bin/bash\n%s\n' "$body" > "$FAKE_BIN/$name"
-  chmod +x "$FAKE_BIN/$name"
-}
-
 setup_fake_bin() {
-  mkdir -p "$FAKE_BIN"
-
-  # git clone: create the target dir and seed VimAnywhere.workflow so the macOS
-  # installer can cp it into ~/Library/Services. rev-parse: signal "not a git repo".
-  make_stub git "case \"\$1\" in
-    clone) mkdir -p \"\$3\" && cp -R \"$REPO_ROOT/VimAnywhere.workflow\" \"\$3/\" ;;
-    rev-parse) exit 1 ;;
-  esac"
-
-  # which: return the stub path for any queried tool
-  make_stub which "echo \"$FAKE_BIN/\$1\""
-
-  # macOS system tools that would have real side effects
-  make_stub defaults
-  make_stub osascript 'echo "Finder"'
+  export HOME="$BATS_TEST_TMPDIR/home" TMPDIR="$BATS_TEST_TMPDIR/tmp" FAKE_BIN="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$HOME" "$TMPDIR" "$FAKE_BIN"
+  export PATH="$FAKE_BIN:/usr/bin:/bin"
+  make_stub osascript 'case "$1" in *current_app.scpt) echo 123 ;; esac'
+  make_stub pbcopy 'cat > "$HOME/clipboard"'
+  make_stub xclip 'cat > "$HOME/clipboard"'
+  make_stub nvim 'exit 0'
 }
-
-teardown_fake_bin() {
-  rm -rf "$FAKE_BIN"
+make_stub() {
+  printf '#!/bin/bash\n%s\n' "${2:-true}" > "$FAKE_BIN/$1"
+  chmod +x "$FAKE_BIN/$1"
 }
-
-# Override HOME so scripts don't touch the real user directory.
-setup_fake_home() {
-  export HOME="$BATS_TMPDIR/home"
-  mkdir -p "$HOME"
-}
-
-# Run a vim-anywhere script with ISOLATED_PATH and explicit OSTYPE.
-# Uses `source` inside bash -c so OSTYPE can be set before the script reads it
-# (bash overwrites OSTYPE from the environment at startup, but an assignment
-# inside the same shell takes effect before the sourced script runs).
-# Both stdout and stderr are captured in $output.
 run_script() {
-  local ostype="$1"
-  local script="$2"
-  run env HOME="$HOME" PATH="$ISOLATED_PATH" \
-    bash -c "OSTYPE=$ostype; source \"$script\" 2>&1"
-}
-
-# Like run_script but with only FAKE_BIN in PATH. Use when the test needs a
-# specific tool to be absent and ISOLATED_PATH would expose it (e.g. on Ubuntu
-# /bin is a symlink to /usr/bin, so tools like gsettings and git are reachable
-# even with a restricted PATH). Safe because the scripts only need bash
-# builtins and FAKE_BIN stubs before they hit the expected failure point.
-run_script_minimal() {
-  local ostype="$1"
-  local script="$2"
-  # Use /bin/bash explicitly: with PATH=FAKE_BIN only, `env ... bash` can't
-  # find bash itself since it's not in FAKE_BIN.
-  run env HOME="$HOME" PATH="$FAKE_BIN" \
-    /bin/bash -c "OSTYPE=$ostype; source \"$script\" 2>&1"
+  local os=$1 script=$2
+  run /bin/bash -c 'OSTYPE=$1; source "$2"' _ "$os" "$script"
 }
